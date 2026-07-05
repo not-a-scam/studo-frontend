@@ -3,12 +3,18 @@ import { createRoot } from "react-dom/client"
 
 import "./index.css"
 import App from "./App.tsx"
-import { ThemeProvider } from "@/components/theme-provider.tsx"
+import { BackendProvider } from "@/providers/backend-provider"
+import { ThemeProvider } from "@/providers/theme-provider.tsx"
+import TargetDateProvider from "./providers/targetdate-provider.tsx"
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
-  </StrictMode>
+    <StrictMode>
+        <ThemeProvider>
+            <BackendProvider>
+                <TargetDateProvider>
+                    <App />
+                </TargetDateProvider>
+            </BackendProvider>
+        </ThemeProvider>
+    </StrictMode>
 )
