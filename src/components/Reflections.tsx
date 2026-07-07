@@ -233,6 +233,7 @@ export default function Reflections() {
 
     const [newReflection, setNewReflection] = React.useState("")
     const [isPosting, setIsPosting] = React.useState(false)
+    const [isBroadcasting, setIsBroadcasting] = React.useState(false)
 
     const refreshComments = React.useCallback(async () => {
         setIsLoading(true)
@@ -299,6 +300,23 @@ export default function Reflections() {
             setIsPosting(false)
         }
     }, [newReflection, createComment, activeGroupInfo.id, refreshComments])
+
+    const handleBroadcast = React.useCallback(async () => {
+        if (!newReflection.trim()) return
+        setIsBroadcasting(true)
+        try {
+            await Promise.all(
+                groups.map((group) => createComment(newReflection, group.id))
+            )
+            setNewReflection("")
+            await refreshComments()
+        } catch (err) {
+            console.error("Failed to broadcast message:", err)
+            setError("Failed to broadcast message")
+        } finally {
+            setIsBroadcasting(false)
+        }
+    }, [newReflection, groups, refreshComments, createComment])
 
     const handleEditComment = React.useCallback(async (commentId: number, content: string) => {
         await updateComment(commentId, content)
@@ -371,11 +389,23 @@ export default function Reflections() {
                 <Button
                     className="text-sm p-1!"
                     onClick={handlePost}
-                    disabled={isPosting || !newReflection.trim()}
+                    disabled={isPosting || isBroadcasting || !newReflection.trim()}
                 >
                     {isPosting ? <Spinner className="mr-1" /> : null}
                     Post Reflection
                 </Button>
+
+                { currentUser?.role === "admin" &&
+                    <Button
+                        className="text-sm p-1!"
+                        onClick={handleBroadcast}
+                        disabled={isPosting || isBroadcasting || !newReflection.trim()}
+                    >
+                        {isBroadcasting ? <Spinner className="mr-1" /> : null}
+                        Broadcast Message
+                    </Button>
+                }
+                
             </div>
 
             {/* Reflections list */}
