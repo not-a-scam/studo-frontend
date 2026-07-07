@@ -222,7 +222,7 @@ export function ManageGroupsModal({ open, onClose }: ModalProps) {
             <DialogContent className="max-w-lg bg-card text-card-foreground">
                 <DialogHeader>
                     <DialogTitle>Manage Groups</DialogTitle>
-                    <DialogDescription>Create, edit, or delete student groups.</DialogDescription>
+                    <DialogDescription>Create, edit, or delete groups.</DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleCreate} className="flex gap-2 my-2">
@@ -758,7 +758,7 @@ export function CreateEditTasksModal({ open, onClose }: ModalProps) {
             <DialogContent className="max-w-3xl bg-card text-card-foreground">
                 <DialogHeader>
                     <DialogTitle>Manage Tasks</DialogTitle>
-                    <DialogDescription>Create, modify, or delete student tasks for any date.</DialogDescription>
+                    <DialogDescription>Create, modify, or delete tasks for any date.</DialogDescription>
                 </DialogHeader>
 
                 <div className="flex items-center gap-4 my-2">
