@@ -170,7 +170,7 @@ const Comment = React.memo(function Comment({ comment, currentUser, onEdit, onDe
 
             {/* Reply form */}
             {isReplying && (
-                <div className="flex flex-col gap-2 pl-5 border-l border-muted/30 ml-4 mt-1">
+                <div className="flex flex-col gap-2 pl-5 border-l border-muted/30 ml-4">
                     <Textarea
                         className="text-xs py-2 px-3 min-h-15"
                         placeholder={`Reply to ${userName}...`}
@@ -204,7 +204,7 @@ const Comment = React.memo(function Comment({ comment, currentUser, onEdit, onDe
 
             {/* Replies List */}
             {comment.replies && comment.replies.length > 0 && (
-                <div className="flex flex-col gap-2 mt-1 w-full">
+                <div className="flex flex-col gap-3 w-full mt-1">
                     {comment.replies.map((reply) => (
                         <Comment
                             key={reply.id}
@@ -379,7 +379,7 @@ export default function Reflections() {
             </div>
 
             {/* Reflections list */}
-            <div className="flex flex-col gap-2 mt-4">
+            <div className="flex flex-col gap-3 mt-4">
                 {isLoading ? (
                     <div className="flex justify-center py-8">
                         <Spinner className="size-6 text-muted-foreground" />
