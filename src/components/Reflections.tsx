@@ -16,12 +16,17 @@ interface CommentProps {
     currentUser: UserType | null
     onEdit: (commentId: number, content: string) => Promise<void>
     onDelete: (commentId: number) => Promise<void>
+    onReply?: (parentId: number, content: string) => Promise<void>
+    isReply?: boolean
 }
 
-const Comment = React.memo(function Comment({ comment, currentUser, onEdit, onDelete }: CommentProps) {
+const Comment = React.memo(function Comment({ comment, currentUser, onEdit, onDelete, onReply, isReply = false }: CommentProps) {
     const [isEditing, setIsEditing] = React.useState(false)
     const [editContent, setEditContent] = React.useState(comment.content)
     const [isSaving, setIsSaving] = React.useState(false)
+    const [isReplying, setIsReplying] = React.useState(false)
+    const [replyContent, setReplyContent] = React.useState("")
+    const [isSubmittingReply, setIsSubmittingReply] = React.useState(false)
 
     const canManage = currentUser?.role === "admin" || currentUser?.id === comment.user_id
 
@@ -46,6 +51,20 @@ const Comment = React.memo(function Comment({ comment, currentUser, onEdit, onDe
         }
     }
 
+    const handleSendReply = async () => {
+        if (!replyContent.trim() || !onReply) return
+        setIsSubmittingReply(true)
+        try {
+            await onReply(comment.id, replyContent)
+            setReplyContent("")
+            setIsReplying(false)
+        } catch (err) {
+            console.error("Failed to send reply:", err)
+        } finally {
+            setIsSubmittingReply(false)
+        }
+    }
+
     const formattedTime = React.useMemo(() => {
         try {
             return new Date(comment.created_at).toLocaleTimeString([], {
@@ -62,77 +81,143 @@ const Comment = React.memo(function Comment({ comment, currentUser, onEdit, onDe
 
     if (isEditing) {
         return (
-            <Card size="sm" className="bg-accent w-full py-3">
-                <CardHeader className=" text-xs flex items-center justify-between px-5 pb-2">
-                    <span className="uppercase font-mono font-semibold text-muted-foreground">Editing Reflection</span>
-                </CardHeader>
-                <CardContent className="bg-card px-5 py-4 flex flex-col gap-3">
+            <div className={cn("w-full", isReply && "pl-5 border-l border-muted/30 ml-4")}>
+                <Card size="sm" className="bg-accent w-full py-3">
+                    <CardHeader className=" text-xs flex items-center justify-between px-5 pb-2">
+                        <span className="uppercase font-mono font-semibold text-muted-foreground">Editing {isReply ? 'Reply' : 'Reflection'}</span>
+                    </CardHeader>
+                    <CardContent className="bg-card px-5 py-4 flex flex-col gap-3">
+                        <Textarea
+                            className="text-sm"
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            disabled={isSaving}
+                        />
+                        <div className="flex gap-2 justify-end">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isSaving}
+                                onClick={() => {
+                                    setIsEditing(false)
+                                    setEditContent(comment.content)
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                size="sm"
+                                disabled={isSaving || !editContent.trim()}
+                                onClick={handleSave}
+                            >
+                                {isSaving ? <Spinner className="mr-1" /> : null}
+                                Save
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
+
+    return (
+        <div className={cn("flex flex-col gap-2 w-full", isReply && "pl-9 border-l border-muted/30")}>
+            <ContextMenu>
+                <ContextMenuTrigger>
+                    <Card size="sm" className={cn("bg-accent w-full py-3", isReply && "bg-accent/10")}>
+                        <CardHeader className="-mb-(--card-spacing) text-xs flex items-center justify-between px-5 pb-2">
+                            <span className="uppercase font-mono font-semibold text-foreground">{userName}</span>
+                            <span className="font-mono text-muted-foreground">{formattedTime}</span>
+                        </CardHeader>
+                        <CardContent className="bg-card -mb-(--card-spacing) px-0 flex flex-col">
+                            <p className="text-sm px-5 pt-4 pb-4 whitespace-pre-wrap flex-1">
+                                {comment.content}
+                            </p>
+                            {!isReply && onReply && (
+                                <div className="px-5 pb-3 flex justify-end">
+                                    <Button 
+                                        variant="ghost" 
+                                        size="xs" 
+                                        className="text-xs font-mono uppercase text-muted-foreground hover:text-foreground h-auto p-0 cursor-pointer"
+                                        onClick={() => setIsReplying(!isReplying)}
+                                    >
+                                        {isReplying ? "Cancel Reply" : "Reply"}
+                                    </Button>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                    <ContextMenuItem onClick={handleCopy}>Copy</ContextMenuItem>
+                    {canManage && (
+                        <>
+                            <ContextMenuItem onClick={() => setIsEditing(true)}>Edit</ContextMenuItem>
+                            <ContextMenuItem
+                                variant="destructive"
+                                onClick={async () => {
+                                    if (confirm(`Are you sure you want to delete this ${isReply ? 'reply' : 'reflection'}?`)) {
+                                        await onDelete(comment.id)
+                                    }
+                                }}
+                            >
+                                Delete
+                            </ContextMenuItem>
+                        </>
+                    )}
+                </ContextMenuContent>
+            </ContextMenu>
+
+            {/* Reply form */}
+            {isReplying && (
+                <div className="flex flex-col gap-2 pl-5 border-l border-muted/30 ml-4 mt-1">
                     <Textarea
-                        className="text-sm"
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        disabled={isSaving}
+                        className="text-xs py-2 px-3 min-h-15"
+                        placeholder={`Reply to ${userName}...`}
+                        value={replyContent}
+                        onChange={(e) => setReplyContent(e.target.value)}
+                        disabled={isSubmittingReply}
                     />
-                    <div className="flex gap-2 justify-end">
+                    <div className="flex justify-end gap-2">
                         <Button
                             variant="ghost"
-                            size="sm"
-                            disabled={isSaving}
+                            size="xs"
+                            disabled={isSubmittingReply}
                             onClick={() => {
-                                setIsEditing(false)
-                                setEditContent(comment.content)
+                                setIsReplying(false)
+                                setReplyContent("")
                             }}
                         >
                             Cancel
                         </Button>
                         <Button
-                            size="sm"
-                            disabled={isSaving || !editContent.trim()}
-                            onClick={handleSave}
+                            size="xs"
+                            disabled={isSubmittingReply || !replyContent.trim()}
+                            onClick={handleSendReply}
                         >
-                            {isSaving ? <Spinner className="mr-1" /> : null}
-                            Save
+                            {isSubmittingReply ? <Spinner className="mr-1" /> : null}
+                            Send Reply
                         </Button>
                     </div>
-                </CardContent>
-            </Card>
-        )
-    }
+                </div>
+            )}
 
-    return (
-        <ContextMenu>
-            <ContextMenuTrigger>
-                <Card size="sm" className="bg-accent w-full py-3">
-                    <CardHeader className="-mb-(--card-spacing) text-xs flex items-center justify-between px-5 pb-2">
-                        <span className="uppercase font-mono font-semibold text-foreground">{userName}</span>
-                        <span className="font-mono text-muted-foreground">{formattedTime}</span>
-                    </CardHeader>
-                    <CardContent className="bg-card -mb-(--card-spacing) px-0">
-                        <p className="text-sm px-5 pt-4 pb-6 whitespace-pre-wrap">
-                            {comment.content}
-                        </p>
-                    </CardContent>
-                </Card>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-                <ContextMenuItem onClick={handleCopy}>Copy</ContextMenuItem>
-                {canManage && (
-                    <>
-                        <ContextMenuItem onClick={() => setIsEditing(true)}>Edit</ContextMenuItem>
-                        <ContextMenuItem
-                            variant="destructive"
-                            onClick={async () => {
-                                if (confirm("Are you sure you want to delete this reflection?")) {
-                                    await onDelete(comment.id)
-                                }
-                            }}
-                        >
-                            Delete
-                        </ContextMenuItem>
-                    </>
-                )}
-            </ContextMenuContent>
-        </ContextMenu>
+            {/* Replies List */}
+            {comment.replies && comment.replies.length > 0 && (
+                <div className="flex flex-col gap-2 mt-1 w-full">
+                    {comment.replies.map((reply) => (
+                        <Comment
+                            key={reply.id}
+                            comment={reply}
+                            currentUser={currentUser}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            isReply={true}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
     )
 })
 
@@ -225,6 +310,11 @@ export default function Reflections() {
         await refreshComments()
     }, [deleteComment, refreshComments])
 
+    const handleReplyComment = React.useCallback(async (parentId: number, content: string) => {
+        await createComment(content, activeGroupInfo.id, parentId)
+        await refreshComments()
+    }, [createComment, activeGroupInfo.id, refreshComments])
+
     return (
         <div className="mt-4 flex flex-col gap-3">
             {/* Reflections header */}
@@ -310,6 +400,7 @@ export default function Reflections() {
                             currentUser={currentUser}
                             onEdit={handleEditComment}
                             onDelete={handleDeleteComment}
+                            onReply={handleReplyComment}
                         />
                     ))
                 )}

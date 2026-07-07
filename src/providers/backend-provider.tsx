@@ -31,11 +31,13 @@ export type CommentType = {
 	target_date: string
 	user_id: string
 	group_id: string
+	parent_id?: number | null
 	created_at: string
 	user: {
 		email: string
 		full_name: string | null
 	} | null
+	replies?: CommentType[]
 }
 
 export type GroupType = {
@@ -60,7 +62,7 @@ type BackendActions = {
 	fetchTaskCompletions: (taskId: number, groupId?: string | null) => Promise<{ id: string; full_name: string | null; email: string; completed: boolean }[]>
 	toggleTaskCompletion: (taskId: number) => Promise<TaskToggleResult>
 	fetchComments: (targetDate: Date, groupId?: string | null) => Promise<CommentType[]>
-	createComment: (content: string, groupId?: string | null) => Promise<CommentType>
+	createComment: (content: string, groupId?: string | null, parentId?: number | null) => Promise<CommentType>
 	updateComment: (commentId: number, content: string) => Promise<CommentType>
 	deleteComment: (commentId: number) => Promise<CommentType>
 	fetchGroups: () => Promise<GroupType[]>
@@ -219,7 +221,7 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
 	)
 
 	const createComment = React.useCallback(
-		async (content: string, groupId?: string | null) => {
+		async (content: string, groupId?: string | null, parentId?: number | null) => {
 			const response = await fetchWithAuth(`${apiBaseUrl}/api/comments`, {
 				method: "POST",
 				headers: {
@@ -228,6 +230,7 @@ export function BackendProvider({ children }: { children: React.ReactNode }) {
 				body: JSON.stringify({
 					content,
 					...(groupId ? { group_id: groupId } : {}),
+					...(parentId ? { parent_id: parentId } : {}),
 				}),
 			})
 			return await readJsonResponse<CommentType>(response)
