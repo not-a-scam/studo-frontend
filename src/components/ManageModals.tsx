@@ -16,6 +16,8 @@ import { Pencil, Trash2, Plus, Loader2, Check, X } from "lucide-react"
 
 // Types matching provider
 import type { UserType, GroupType, BackendTask } from "@/providers/backend-provider"
+import { Switch } from "./ui/switch"
+import { Textarea } from "./ui/textarea"
 
 interface ModalProps {
     open: boolean
@@ -655,6 +657,16 @@ export function CreateEditTasksModal({ open, onClose }: ModalProps) {
     const [actionLoading, setActionLoading] = React.useState(false)
     const [error, setError] = React.useState<string | null>(null)
 
+    const [isMultiTaskAdding, setIsMultiTaskAdding] = React.useState(false)
+    const [startDateStr, setStartDateStr] = React.useState(() => {
+        const d = new Date()
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, "0")
+        const day = String(d.getDate()).padStart(2, "0")
+        return `${year}-${month}-${day}`
+    })
+    const [multiTaskText, setMultiTaskText] = React.useState("")
+
     const loadTasks = React.useCallback(async () => {
         setLoading(true)
         setError(null)
@@ -676,6 +688,13 @@ export function CreateEditTasksModal({ open, onClose }: ModalProps) {
             setTitle("")
             setDescription("")
             setExternalUrl("")
+            setMultiTaskText("")
+            setIsMultiTaskAdding(false)
+            const d = new Date()
+            const year = d.getFullYear()
+            const month = String(d.getMonth() + 1).padStart(2, "0")
+            const day = String(d.getDate()).padStart(2, "0")
+            setStartDateStr(`${year}-${month}-${day}`)
         }
     }, [open, loadTasks])
 
@@ -735,6 +754,66 @@ export function CreateEditTasksModal({ open, onClose }: ModalProps) {
         }
     }
 
+    const handleMultiTaskAdd = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!multiTaskText.trim()) return
+
+        setActionLoading(true)
+        setError(null)
+        try {
+            const lines = multiTaskText.split(/\r?\n/)
+            const tasksToAdd = []
+            const currentDate = new Date(startDateStr + "T00:00:00")
+
+            for (const line of lines) {
+                if (!line.trim()) continue
+                const parts = line.split(",")
+                const parsedTitle = parts[0]?.trim() || ""
+                if (!parsedTitle) continue
+
+                let parsedDesc: string | null = null
+                let parsedUrl: string | null = null
+
+                if (parts.length === 2) {
+                    parsedDesc = parts[1]?.trim() || null
+                } else if (parts.length >= 3) {
+                    parsedDesc = parts[1]?.trim() || null
+                    parsedUrl = parts[2]?.trim() || null
+                }
+
+                const year = currentDate.getFullYear()
+                const month = String(currentDate.getMonth() + 1).padStart(2, "0")
+                const day = String(currentDate.getDate()).padStart(2, "0")
+                const dateStr = `${year}-${month}-${day}`
+
+                tasksToAdd.push({
+                    title: parsedTitle,
+                    description: parsedDesc,
+                    external_url: parsedUrl,
+                    target_date: dateStr,
+                })
+
+                currentDate.setDate(currentDate.getDate() + 1)
+            }
+
+            for (const task of tasksToAdd) {
+                await createTask(task)
+            }
+
+            setMultiTaskText("")
+            setIsMultiTaskAdding(false)
+            if (targetDateStr === startDateStr) {
+                await loadTasks()
+            } else {
+                setTargetDateStr(startDateStr)
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to add tasks")
+        } finally {
+            setActionLoading(false)
+        }
+    }
+
     const handleDeleteTask = async (taskId: number) => {
         if (!confirm("Are you sure you want to delete this task? All user completions for it will also be deleted.")) return
         
@@ -760,144 +839,187 @@ export function CreateEditTasksModal({ open, onClose }: ModalProps) {
                     <DialogTitle>Manage Tasks</DialogTitle>
                     <DialogDescription>Create, modify, or delete tasks for any date.</DialogDescription>
                 </DialogHeader>
-
-                <div className="flex items-center gap-4 my-2">
-                    <label className="text-xs font-semibold shrink-0">Select Target Date:</label>
-                    <Input
-                        type="date"
-                        value={targetDateStr}
-                        onChange={(e) => setTargetDateStr(e.target.value)}
-                        className="h-8 max-w-50"
-                        disabled={actionLoading}
+                <Field orientation="horizontal" className="items-center">
+                    <FieldLabel className="text-xs font-semibold shrink-0">Multi-Task Adding</FieldLabel>
+                    <Switch
+                        checked={isMultiTaskAdding}
+                        onCheckedChange={setIsMultiTaskAdding}
                     />
-                    {editingTaskId !== null && (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={startCreating}
+                </Field>
+
+                {isMultiTaskAdding && (
+                    <form onSubmit={handleMultiTaskAdd} className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            Add multiple tasks at once by entering them in the text area below.
+                        </p>
+
+                        <div className="flex items-center gap-4 my-2">
+                            <label className="text-xs font-semibold shrink-0">Start Date:</label>
+                            <Input
+                                type="date"
+                                value={startDateStr}
+                                onChange={(e) => setStartDateStr(e.target.value)}
+                                className="h-8 max-w-50"
+                                disabled={actionLoading}
+                                required
+                            />
+                        </div>
+
+                        <Textarea
+                            placeholder="Enter tasks separated by new lines...&#10;e.g.&#10;Task Title 1&#10;Task Title 2,Task Description 2&#10;Task Title 3,,https://example.com&#10;Task Title 4,Task Description 4,https://example.com"
+                            className="min-h-36 text-sm"
+                            value={multiTaskText}
+                            onChange={(e) => setMultiTaskText(e.target.value)}
                             disabled={actionLoading}
-                            className="h-8 ml-auto text-xs"
-                        >
-                            Add New Task instead
+                            required
+                        />
+
+                        {error && <FieldError className="mb-2">{error}</FieldError>}
+
+                        <Button className="w-full" type="submit" disabled={actionLoading}>
+                            {actionLoading ? <Loader2 className="animate-spin size-4" /> : "Add Tasks"}
                         </Button>
-                    )}
-                </div>
+                    </form>
+                )}
 
-                {error && <FieldError className="mb-2">{error}</FieldError>}
-
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    {/* Left: Tasks List */}
-                    <div className="md:col-span-3 border rounded-md max-h-96 overflow-y-auto divide-y">
-                        {loading ? (
-                            <div className="p-8 flex justify-center"><Loader2 className="animate-spin size-6 text-muted-foreground" /></div>
-                        ) : tasks.length === 0 ? (
-                            <div className="p-4 text-center text-sm text-muted-foreground">No tasks scheduled for this day.</div>
-                        ) : (
-                            tasks.map((task) => (
-                                <div key={task.id} className={`p-3 flex items-center justify-between text-sm gap-2 ${editingTaskId === task.id ? "bg-accent" : ""}`}>
-                                    <div className="flex flex-col min-w-0">
-                                        <span className="font-semibold truncate">{task.title}</span>
-                                        {task.description && <span className="text-xs text-muted-foreground truncate">{task.description}</span>}
-                                        {task.external_url && (
-                                            <a href={task.external_url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline truncate">
-                                                {task.external_url}
-                                            </a>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => startEditing(task)}
-                                            disabled={actionLoading}
-                                            className="h-8 w-8 p-0 cursor-pointer"
-                                        >
-                                            <Pencil className="size-4 text-muted-foreground" />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => handleDeleteTask(task.id)}
-                                            disabled={actionLoading}
-                                            className="h-8 w-8 p-0 cursor-pointer text-destructive hover:bg-destructive/10"
-                                        >
-                                            <Trash2 className="size-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))
+                {!isMultiTaskAdding && (
+                    <div>
+                        <div className="flex items-center gap-4 my-2">
+                            <label className="text-xs font-semibold shrink-0">Select Target Date:</label>
+                            <Input
+                                type="date"
+                                value={targetDateStr}
+                            onChange={(e) => setTargetDateStr(e.target.value)}
+                            className="h-8 max-w-50"
+                            disabled={actionLoading}
+                        />
+                        {editingTaskId !== null && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={startCreating}
+                                disabled={actionLoading}
+                                className="h-8 ml-auto text-xs"
+                            >
+                                Add New Task instead
+                            </Button>
                         )}
                     </div>
+                    {error && <FieldError className="mb-2">{error}</FieldError>}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        {/* Left: Tasks List */}
+                        <div className="md:col-span-3 border rounded-md max-h-96 overflow-y-auto divide-y">
+                            {loading ? (
+                                <div className="p-8 flex justify-center"><Loader2 className="animate-spin size-6 text-muted-foreground" /></div>
+                            ) : tasks.length === 0 ? (
+                                <div className="p-4 text-center text-sm text-muted-foreground">No tasks scheduled for this day.</div>
+                            ) : (
+                                tasks.map((task) => (
+                                    <div key={task.id} className={`p-3 flex items-center justify-between text-sm gap-2 ${editingTaskId === task.id ? "bg-accent" : ""}`}>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="font-semibold truncate">{task.title}</span>
+                                            {task.description && <span className="text-xs text-muted-foreground truncate">{task.description}</span>}
+                                            {task.external_url && (
+                                                <a href={task.external_url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline truncate">
+                                                    {task.external_url}
+                                                </a>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => startEditing(task)}
+                                                disabled={actionLoading}
+                                                className="h-8 w-8 p-0 cursor-pointer"
+                                            >
+                                                <Pencil className="size-4 text-muted-foreground" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleDeleteTask(task.id)}
+                                                disabled={actionLoading}
+                                                className="h-8 w-8 p-0 cursor-pointer text-destructive hover:bg-destructive/10"
+                                            >
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
 
-                    {/* Right: Form (Create or Edit) */}
-                    <div className="md:col-span-2 border rounded-md p-4 bg-muted/30">
-                        <form onSubmit={handleSaveTask} className="space-y-3">
-                            <h4 className="font-semibold text-sm border-b pb-1">
-                                {editingTaskId !== null ? "Edit Task" : "Create New Task"}
-                            </h4>
-                            
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold block">Task Title</label>
-                                <Input
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    placeholder="Enter title (e.g. Daily Reflection)"
-                                    className="h-8 text-xs"
-                                    disabled={actionLoading}
-                                    required
-                                />
-                            </div>
+                        {/* Right: Form (Create or Edit) */}
+                        <div className="md:col-span-2 border rounded-md p-4 bg-muted/30">
+                            <form onSubmit={handleSaveTask} className="space-y-3">
+                                <h4 className="font-semibold text-sm border-b pb-1">
+                                    {editingTaskId !== null ? "Edit Task" : "Create New Task"}
+                                </h4>
 
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold block">Description</label>
-                                <Input
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="Optional description"
-                                    className="h-8 text-xs"
-                                    disabled={actionLoading}
-                                />
-                            </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold block">Task Title</label>
+                                    <Input
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        placeholder="Enter title (e.g. Daily Reflection)"
+                                        className="h-8 text-xs"
+                                        disabled={actionLoading}
+                                        required
+                                    />
+                                </div>
 
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold block">Link URL</label>
-                                <Input
-                                    type="url"
-                                    value={externalUrl}
-                                    onChange={(e) => setExternalUrl(e.target.value)}
-                                    placeholder="https://example.com"
-                                    className="h-8 text-xs"
-                                    disabled={actionLoading}
-                                />
-                            </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold block">Description</label>
+                                    <Input
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        placeholder="Optional description"
+                                        className="h-8 text-xs"
+                                        disabled={actionLoading}
+                                    />
+                                </div>
 
-                            <div className="flex justify-end gap-2 pt-2 border-t">
-                                {editingTaskId !== null && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold block">Link URL</label>
+                                    <Input
+                                        type="url"
+                                        value={externalUrl}
+                                        onChange={(e) => setExternalUrl(e.target.value)}
+                                        placeholder="https://example.com"
+                                        className="h-8 text-xs"
+                                        disabled={actionLoading}
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-2 border-t">
+                                    {editingTaskId !== null && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={startCreating}
+                                            disabled={actionLoading}
+                                            className="h-8 text-xs"
+                                        >
+                                            Cancel
+                                        </Button>
+                                    )}
                                     <Button
-                                        type="button"
-                                        variant="outline"
+                                        type="submit"
                                         size="sm"
-                                        onClick={startCreating}
                                         disabled={actionLoading}
                                         className="h-8 text-xs"
                                     >
-                                        Cancel
+                                        {actionLoading ? <Loader2 className="animate-spin size-3" /> : (editingTaskId !== null ? "Save" : "Create")}
                                     </Button>
-                                )}
-                                <Button
-                                    type="submit"
-                                    size="sm"
-                                    disabled={actionLoading}
-                                    className="h-8 text-xs"
-                                >
-                                    {actionLoading ? <Loader2 className="animate-spin size-3" /> : (editingTaskId !== null ? "Save" : "Create")}
-                                </Button>
-                            </div>
-                        </form>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
-
-                <DialogFooter className="mt-4">
+                )}
+                <DialogFooter>
                     <Button variant="outline" onClick={onClose}>
                         Close
                     </Button>
