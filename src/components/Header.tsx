@@ -33,7 +33,8 @@ export default function Header() {
 
     return (
         <div className="sticky top-0 w-full h-min flex justify-between bg-background px-6 py-4 z-50 border-b border-border/40">
-            <h1 className="font-bold text-2xl">StuDo</h1>
+            <h1 className="font-bold text-xs">Secondary<br />Grow Together</h1>
+
             <Popover>
                 <PopoverTrigger>
                     <Avatar className="cursor-pointer">
@@ -45,7 +46,7 @@ export default function Header() {
                 <PopoverContent align="end" className="w-48 py-2 mt-2 bg-accent shadow-lg border border-border">
                     <FieldGroup className="gap-1!">
                         <div className="px-2 py-1 mb-1 border-b border-border/60">
-                            <p className="text-xs font-semibold truncate">{currentUser?.full_name || "StuDo User"}</p>
+                            <p className="text-xs font-semibold truncate">{currentUser?.full_name || "Secondary Grow Together User"}</p>
                             <p className="text-[10px] text-muted-foreground truncate">{currentUser?.email}</p>
                         </div>
                         
